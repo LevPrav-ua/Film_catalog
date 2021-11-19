@@ -1,0 +1,485 @@
+#define _CRT_SECURE_NO_WARNINGS
+#include<stdlib.h>
+#include<stdio.h>
+#include<cstdio>
+#include<windows.h>
+
+struct Film {
+    float cost = 0;
+    int year = 0;
+    int copies = 0;
+    char name[128] = { 0 };
+    char director[64] = { 0 };
+    void show();
+    void input(char*);
+    void clean();
+    Film(Film&);
+    Film() {};
+};
+
+Film::Film(Film& film) {
+    if (&film == NULL) return;
+    this->copies = film.copies;
+    this->year = film.year;
+    this->cost = film.cost;
+    strcpy(this->name, film.name);
+    strcpy(this->director, film.director);
+}
+void Film::input(char* str) {
+    int i, j;
+    for (i = 0; str[i] != ';'; i++);
+    memcpy(name, str, i);
+    name[i++] = '\0';
+    for (j = i; str[j] != ';'; j++);
+    memcpy(director, str + i, j - i);
+    director[j++] = '\0';
+    sscanf(str + j, "%d; %d; %f", &year, &copies,&cost);
+}
+void Film::show() {
+    printf("%15s ; %12s; %5d; %5i; %.2f", 
+        name, director, year, copies, cost);
+}
+void Film::clean() {
+    memset(name, 0, 128);
+    memset(director, 0,64);
+    cost = year = copies = 0;
+}
+
+struct filmNode {
+    Film* film = NULL;
+    filmNode* next = NULL;
+    filmNode();
+    filmNode(filmNode&);
+    ~filmNode();
+};
+filmNode::~filmNode() {
+    delete film;
+}
+filmNode::filmNode() {
+    film = new Film();
+}
+filmNode::filmNode(filmNode& f_node) {
+    film = new Film(*f_node.film);
+}
+
+struct Catalog {
+    filmNode* head = NULL;
+    int len = 0;
+    void readFile();
+    void writeFile();
+    void show();
+    void addFilm();
+    void edit();
+    void deleteFilm();
+    void find(Film**, int);
+    Film* mostExpFilm();
+    ~Catalog();
+};
+
+Catalog* sortedCatalog(const Catalog&, bool);
+int compare(const Catalog&);
+
+Catalog::~Catalog() {
+    filmNode* tmp = head, *dlt;
+    while (tmp != NULL) {
+        dlt = tmp->next;
+        delete tmp;
+        tmp = dlt;
+    }
+}
+void Catalog::readFile() {
+    printf("Введите имя файла, который хотите читать:\n");
+    char fileName[64];
+    fflush(stdin);
+    scanf("%s", fileName);
+    FILE* file = fopen(fileName, "r");
+    if (file == NULL) {
+        printf("Ошибка открытия файла\n");
+        return;
+    }
+    fseek(file, 0, SEEK_END);
+    if (ftell(file) == 0) {
+        printf("Файл пуст\n");
+        return;
+    }
+    fseek(file, 0, SEEK_SET);
+
+    filmNode* tmp;
+    if (head == NULL) {
+        head = new filmNode();
+        char str[128] = { 0 };
+        fgets(str, 127, file);
+        
+        head->film->input(str);
+        tmp = head;
+        len++;
+    }
+    else {
+        tmp = head;
+        while (tmp->next != NULL) tmp = tmp->next;
+    }
+
+    while (!feof(file))
+    {
+        char str[128] = { 0 };
+        fgets(str, 127, file);
+        if (str[0] == '\0') break;
+        tmp->next = new filmNode();
+        tmp->next->film->input(str);
+        tmp = tmp->next;
+        len++;
+    }
+    
+    fclose(file);
+    printf("Каталон заполнен !\n\n");
+}
+void Catalog::show() {
+    if (head == NULL) {
+        printf("Каталог пуст\n");
+        return;
+    }
+    filmNode* tmp = head;
+    int i = 1;
+    printf("№.  НАЗВАНИЕ_ФИЛЬМА;     РЕЖИССЁР;   ГОД;  ЦЕНА; КОЛ-ВО КОПИЙ\n");
+    while (tmp != NULL) {
+        printf("%d. ", i++);
+        tmp->film->show();
+        printf("\n");
+        tmp = tmp->next;
+    }
+}
+void Catalog::addFilm() {
+    filmNode* tmp;
+    if (len == 0) {
+        head = new filmNode();
+        tmp = head;
+    }
+    else {
+        tmp = head;
+        while (tmp->next != NULL) tmp = tmp->next;
+        tmp->next = new filmNode();
+        tmp = tmp->next;
+    }
+    printf("Введите НАЗВАНИЕ ФИЛЬМА; ИМЯ РЕЖИССЁРА; ГОД ВЫПУСКА; КОЛ-ВО КОПИЙ; ЦЕНУ\n");
+    char str[128] = { 0 };
+    while (char c = getchar() != '\n' && c != EOF);
+    gets_s(str,127); //gets была недоступна в VS
+    tmp->film->input(str);
+    len++;
+}
+void Catalog::edit() {
+    show();
+    if (head == NULL) return;
+    bool in = true;
+    int num;
+    filmNode* tmp = head;
+    while (in) {
+        printf("Введите номер записи, которую хотите редактировать:\n");
+        fflush(stdin);
+        num = 0;
+        scanf("%d", &num);
+        if (num<1 || num > len) {
+            printf("Неверный номер записи\n");
+            continue;
+        }
+        in = false;
+    }
+    while (--num) tmp = tmp->next;
+    tmp->film->clean();
+    printf("Введите НАЗВАНИЕ ФИЛЬМА; ИМЯ РЕЖИССЁРА; ГОД ВЫПУСКА; КОЛ-ВО КОПИЙ; ЦЕНУ\n");
+    char str[128] = { 0 };
+    while (char c = getchar() != '\n' && c != EOF);
+    gets_s(str, 127); //gets была недоступна в VS
+    tmp->film->input(str);
+    printf("Данные успешно изменены \n");
+}
+void Catalog::deleteFilm() {
+    show();
+    printf("Введите номер записи, которую хотите удалить:\n");
+    fflush(stdin);
+    int num = 0;
+    scanf("%d", &num);
+    if (num < 1 || num > len) {
+        printf("Неверный номер записи\n");
+        return;
+    }
+    --num;
+    filmNode* tmp = head;
+    while (--num) tmp = tmp->next;
+    filmNode* next = tmp->next->next;
+    delete tmp->next;
+    tmp->next = next;
+    len--;
+}
+void Catalog::find(Film** films, int len = 1) {
+    if (head == NULL) {
+        printf("Каталог пуст! \n");
+        return;
+    }
+    printf("Введите название фильма, который хотите найти: \n");
+    fflush(stdin);
+    char name[128];
+    while (char c = getchar() != '\n' && c != EOF);
+    gets_s(name,127);
+    int i = 0;
+    for (filmNode* tmp = head; tmp != NULL && i < len; tmp = tmp->next) {
+        if (strcmp(tmp->film->name, name) == 0){
+            films[i] = tmp->film;
+            i++;
+        }
+    }
+}
+void Catalog::writeFile() {
+    if (head == NULL) {
+        printf("Каталог пуст\n");
+        return;
+    }
+    printf("Введите имя файла, куда хотите поместить каталог\n");
+    char fileName[64];
+    scanf("%s", fileName);
+    FILE* file;
+    printf("Вы хотите дополнить или переписать файл ? (1/2)\n");
+    int ans;
+    scanf("%d",&ans);
+    if (ans == 2)
+        file = fopen(fileName, "w+");
+    else
+        file = fopen(fileName, "a+");
+    if (file == NULL) {
+        printf("Ошибка открытия файла\n");
+        return;
+    }
+    fseek(file, 0, SEEK_END);
+    filmNode* tmp = head;
+    while(tmp != NULL){
+        char buf[256];
+        sprintf(buf, "%s; %s; %d; %d; %.2f\n",tmp->film->name, tmp->film->director, 
+            tmp->film->year,
+            tmp->film->copies, tmp->film->cost);
+        fputs(buf,file);
+        tmp = tmp->next;
+    }
+    fclose(file);
+    printf("Запись прошла успешно\n");
+}
+Film* Catalog::mostExpFilm() {
+    if (head == NULL) {
+        printf("Каталог пуст\n");
+        return NULL;
+    }
+    filmNode* max = head;
+    for (filmNode* tmp = head->next; tmp != NULL; tmp = tmp->next) {
+        if(tmp->film->cost > max->film->cost)
+            max = tmp;
+    }
+    return max->film;
+}
+
+
+Catalog* sortedCatalog(const Catalog& cat, bool order = true) {
+    if (cat.head == NULL) return NULL;
+    Catalog* sorted = new Catalog();
+    filmNode* tmp = cat.head->next, *sort;
+    sorted->head = new filmNode(*cat.head);
+    sorted->len++;
+    while (tmp != NULL) {
+        sort = sorted->head;
+        if (strcmp(tmp->film->name, sort->film->name) < 0) {
+            sort = new filmNode(*tmp);
+            sort->next = sorted->head;
+            sorted->head = sort;
+            sorted->len++;
+            tmp = tmp->next;
+            continue;
+        }
+        while (sort->next != NULL &&
+            strcmp(tmp->film->name, sort->next->film->name) >= 0)
+            sort = sort->next;
+        if (sort->next == NULL) {
+            sort->next = new filmNode(*tmp);
+        }
+        else {
+            filmNode* s_tmp = sort->next;
+            sort->next = new filmNode(*tmp);
+            sort->next->next = s_tmp;
+        }
+        sorted->len++;
+        tmp = tmp->next;
+    }
+    if (order == false) {
+        filmNode* new_head = NULL;
+        for (filmNode* pos = sorted->head; pos != NULL;) {
+            filmNode* save_node = pos->next;
+            pos->next = new_head;
+            new_head = pos;
+            pos = save_node;
+        }
+        sorted->head = new_head;
+    }
+    return sorted;
+}
+int compare(const Catalog& cat) {
+    if (cat.head == NULL) {
+        printf("Каталог пуст\n");
+        return 0;
+    }
+    printf("Введите имя файла, с которым хотите сравнить каталог:\n");
+    char fileName[64];
+    fflush(stdin);
+    scanf("%s", fileName);
+    FILE* file = fopen(fileName, "r");
+    if (file == NULL) {
+        printf("Ошибка открытия файла\n");
+        return 0;
+    }
+    filmNode* tmp = cat.head;
+    int i, changes = 0;
+    for(i = 0;!feof(file) && tmp != NULL;i++)
+    {
+        char buf[128];
+        char str[128] = { 0 };
+        fgets(str, 127, file);
+        if (str[0] == '\0') break;
+        sprintf(buf, "%s;%s;%d;%d;%.2f\n", tmp->film->name, tmp->film->director,
+            tmp->film->year,
+            tmp->film->copies, tmp->film->cost);
+        if (strcmp(str, buf) != 0) changes++;
+        tmp = tmp->next;
+    }
+    fclose(file);
+    return changes + cat.len - i;
+}
+
+enum eCMD {
+    CMD_EXIT , CMD_READ , CMD_SHOW, CMD_ADD, CMD_SORT,CMD_EDIT, 
+    CMD_DELETE, CMD_FIND, CMD_CLEAN, CMD_SAVE, CMD_MEF
+};
+
+eCMD Menu() {
+
+    while(true){
+        system("cls");
+    printf("Это Меню СУБД \"Каталог худоежственных фильмов\"\n");
+    printf("1. Заполнить каталог из файла\n");
+    printf("2. Вывести каталог в консоль\n");
+    printf("3. Добавить запись в каталог\n");
+    printf("4. Отсортировать каталог\n");
+    printf("5. Изменить запись \n");
+    printf("6. Удалить запись\n");
+    printf("7. Найти фильм\n");
+    printf("8. Очистить каталог\n");
+    printf("9. Сохранить каталог в файл\n");
+    printf("10 Показать самый дорогой фильм\n");
+    printf("0. Выход\n");
+    int ans = 0;
+    scanf("%d", &ans);
+    switch (ans) {
+    case 1:
+        return CMD_READ;
+    case 2:
+        return CMD_SHOW;
+    case 3:
+        return CMD_ADD;
+    case 4:
+        return CMD_SORT;
+    case 5:
+        return CMD_EDIT;
+    case 6:
+        return CMD_DELETE;
+    case 7:
+        return CMD_FIND;
+    case 8:
+        return CMD_CLEAN;
+    case 9:
+        return CMD_SAVE;
+    case 10:
+        return CMD_MEF;
+    case 0:
+        return CMD_EXIT;
+    default:
+        printf("Неправильная команда\n");
+    }
+    }
+}
+
+int main(int argc, char* argv[]) {
+    system("chcp 1251");
+    Catalog* cat = new Catalog();
+    Film* films[10] = { NULL };
+    Catalog* sorted;
+
+    while (true) {
+        eCMD cmd = Menu();
+        switch (cmd)
+        {
+        case CMD_EXIT:
+            printf("Давайте проверим, есть ли у вас несохранённые данные\n");
+            if (compare(*cat) > 0) {
+                printf("У вас есть несохранённые изменения. Хотите сохранить?\n (1/0)\n");
+                int ans;
+                fflush(stdin);
+                scanf("%d", &ans);
+                if (ans == 1)
+                    cat->writeFile();
+            }
+            delete cat;
+            return 0;
+        case CMD_READ:
+            cat->readFile();
+            break;
+        case CMD_SHOW:
+            cat->show();
+            break;
+        case CMD_ADD:
+            cat->addFilm();
+            break;
+        case CMD_SORT:
+        {
+            printf("Хотите сортировать по возрастанию или по убываюнию?\n 1/2\n");
+            int ans;
+            bool order = true;
+            scanf("%d", &ans);
+            if (ans == 2)
+                order = false;
+            sorted = sortedCatalog(*cat, order);
+            if (sorted == NULL)
+                break;
+            delete cat;
+            cat = sorted;
+            printf("Сортировка прошла успешно\n");
+            break;
+        }
+        case CMD_EDIT:
+            cat->edit();
+            break;
+        case CMD_DELETE:
+            cat->deleteFilm();
+            break;
+        case CMD_FIND:
+            cat->find(films,10);
+            if (films[0] == NULL) {
+                printf("Совпадений не найдено\n");
+            }
+            for (int i = 0; films[i] != NULL; i++) {
+                films[i]->show();
+                printf("\n");
+            }
+            break;
+        case CMD_CLEAN:
+            cat->~Catalog();
+            break;
+        case CMD_SAVE:
+            cat->writeFile();
+            break;
+        case CMD_MEF:
+            Film* exp = cat->mostExpFilm();
+            if (exp != NULL)
+                exp->show();
+            printf("\n");
+            break;
+        }
+        system("pause");
+    }
+    
+    return 0;
+}

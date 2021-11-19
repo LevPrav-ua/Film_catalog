@@ -1,0 +1,8 @@
+#pragma once
+
+
+enum eCMD {
+    CMD_EXIT, CMD_READ, CMD_SHOW, CMD_ADD, CMD_SORT, CMD_EDIT,
+    CMD_DELETE, CMD_FIND, CMD_CLEAN, CMD_SAVE, CMD_MEF
+};
+eCMD Menu();
